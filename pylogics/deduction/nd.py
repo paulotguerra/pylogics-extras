@@ -28,6 +28,10 @@ from pylogics.exceptions import PylogicsError
 
 from enum import Enum
 
+from pylogics.syntax.fol import Term, Variable, Constant, Function
+from pylogics.syntax.fol import Predicate, ForAll, Exists
+import copy
+
 class NaturalDeductionRule(Enum):
     """Enumeration of natural deduction rules."""
 
@@ -48,6 +52,10 @@ class NaturalDeductionRule(Enum):
     or_i1 = "or_i1"
     or_i2 = "or_i2"
     premise = "premise"
+    exists_e = "exists_e"
+    exists_i = "exists_i"
+    forall_e = "forall_e"
+    forall_i = "forall_i"
 
 class NaturalDeductionProof(list):
     pass
@@ -55,24 +63,9 @@ class NaturalDeductionProof(list):
 class NaturalDeduction(AbstractDeductionSystem):
     """Natural Deduction System."""
 
-    def proof(self, proof: list):
-        proof_nf = NaturalDeductionProof()        
-        while proof:
-            row, content, *proof = proof
-            if isinstance(content, Formula):
-                justification, *proof = proof
-                proof_nf.append((row, content, justification))
-            elif isinstance(content, list):                
-                proof_nf.append((row, self.proof([row] + content), NaturalDeductionRule.assumption))
-        return proof_nf
 
-    def check(self, proof: list, sound = {}) -> bool:
-        """Check a given proof according to natural deduction rules."""
-        # raise PylogicsError(
-        #     f"proof '{proof}' cannot be processed by {self.check.__name__}"  # type: ignore
-        # )
-
-        check_justiﬁcation = {
+    def __init__(self):
+        self.check_justiﬁcation = {
             NaturalDeductionRule.and_e1:self._check_justiﬁcation_and_e1,
             NaturalDeductionRule.and_e2:self._check_justiﬁcation_and_e2,
             NaturalDeductionRule.and_i:self._check_justiﬁcation_and_i,
@@ -90,19 +83,48 @@ class NaturalDeduction(AbstractDeductionSystem):
             NaturalDeductionRule.or_i2:self._check_justiﬁcation_or_i2,
             NaturalDeductionRule.premise:self._check_justiﬁcation_premise, 
             NaturalDeductionRule.assumption:self._check_justiﬁcation_assumption, 
+            NaturalDeductionRule.forall_e:self._check_justification_forall_e,
+            NaturalDeductionRule.forall_i:self._check_justification_forall_i,
+            NaturalDeductionRule.exists_e:self._check_justification_exists_e,
+            NaturalDeductionRule.exists_i:self._check_justification_exists_i,
         }
 
+    def proof(self, proof: list):
+        proof_nf = NaturalDeductionProof()        
+        while proof:
+            row, content, *proof = proof
+            if isinstance(content, Formula) or isinstance(content, Term):
+                justification, *proof = proof
+                proof_nf.append((row, content, justification))
+            elif isinstance(content, list):
+                if isinstance(content[0], Term) and isinstance(content[1], Formula):
+                    content = [content[0]] + [NaturalDeductionRule.assumption, row] + content[1:]
+                proof_nf.append((row, self.proof([row] + content), NaturalDeductionRule.assumption))
+        return proof_nf
+
+    def check(self, proof: list, sound = None) -> bool:
+        """Check a given proof according to natural deduction rules."""
+        # raise PylogicsError(
+        #     f"proof '{proof}' cannot be processed by {self.check.__name__}"  # type: ignore
+        # )
+     
+        sound = sound if sound else {}
+        
         for row, content, justiﬁcation in proof:
             if isinstance(content, Formula):
                 rule = justiﬁcation[0]
                 args = [sound[i] for i in justiﬁcation[1:] if i in sound]
-                if rule not in check_justiﬁcation:
+                if rule not in self.check_justiﬁcation:
                     return False
-                if check_justiﬁcation[rule](content, *args) == False:
+                if self.check_justiﬁcation[rule](content, *args) == False:
                     return False
             elif isinstance(content, list):
+                if isinstance(content[0][1], Term) and self._find_term(content[0][1], *sound.values()):                    
+                    return False # Term occurs outside its assumption
                 if self.check(content, {i:sound[i] for i in sound}) == False:
                     return False
+            elif isinstance(content, Term):
+                continue
             else:
                 return False            
             sound[row] = content            
@@ -183,6 +205,92 @@ class NaturalDeduction(AbstractDeductionSystem):
     def _check_justification_premise(self, formula, *args):
         """Check if the deduction is valid according to premise rule"""
         return True
+    
+    
+    def _find_term(self, t:Term, *args):
+        for x in args:
+            if t == x:
+                return True
+            if 'argument' in dir(x) and self._find_term(t, x.argument):
+                return True
+            if 'operands' in dir(x) and self._find_term(t, *(x.operands)):
+                return True
+        return False
+
+    def _find_diff(self, x:Formula, y:Formula):
+        diffset = set()
+        if type(x) != type(y):
+            diffset = diffset | {(x,y)}
+        elif 'argument' in dir(x):
+            diffset = diffset | self._find_diff(x.argument, y.argument)
+        elif 'operands' in dir(x):    
+            if len(x.operands) != len(y.operands):
+                diffset = diffset | {(x,y)}
+            else:
+                for a,b in zip(x.operands, y.operands):
+                    diffset = diffset | self._find_diff(a,b)
+        return diffset
+
+    def _replace(self, formula:Formula, x:Variable, a:Term):
+        if formula is x:
+            return a
+        if isinstance(formula,Not):
+            return type(formula)(self._replace(formula.argument, x, a))
+        if isinstance(formula,(Or,And,Implies)):
+            return type(formula)(*[self._replace(o, x, a) for o in formula.operands])
+        if isinstance(formula,(ForAll,Exists)):
+            if formula.variable == x:
+                return formula
+            return type(formula)(formula.variable, [self._replace(o, x, a) for o in formula.operands])
+        if isinstance(formula,(Predicate,Function)):
+            return type(formula)(formula.name, [self._replace(o, x, a) for o in formula.operands])
+        return formula
+
+    def _check_justification_forall_i(self, formula, *args):
+        """Check if the deduction is valid according to forall-introduction rule"""
+        if not isinstance(formula, ForAll):
+            return False
+        a, phi_x_a = args[0][0][1], args[0][-1][1] 
+        if not isinstance(a, Term):
+            return False
+        x, phi = formula.variable, formula.formula
+        return str(self._replace(phi,x,a)) == str(phi_x_a)
+
+    def _check_justification_forall_e(self, formula, *args):
+        """Check if the deduction is valid according to forall-elimination rule"""
+        if not isinstance(args[0], ForAll):
+            return False
+        x, phi = args[0].variable, args[0].formula
+        a = [n for m,n in self._find_diff(phi, formula) if m == x]
+        if len(a) != 1:
+            return False        
+        phi_x_a = self._replace(phi, x, a[0])
+        return str(phi_x_a) == str(formula)
+
+    def _check_justification_exists_i(self, formula, *args):
+        """Check if the deduction is valid according to exists-introduction rule"""
+        if not isinstance(formula, Exists):
+            return False
+        x, phi = formula.variable, formula.formula
+        a = [n for m,n in self._find_diff(phi, args[0]) if m == x]
+        if len(a) > 1:
+            return False        
+        a = a[0] if a else x
+        phi_x_a = self._replace(phi, x, a)
+        return str(phi_x_a) == str(args[0])
+
+    def _check_justification_exists_e(self, formula, *args):
+        """Check if the deduction is valid according to exists-elimination rule"""
+        phi = args[0]
+        if not isinstance(phi, Exists):
+            return False
+        a, phi_x_a = args[1][0][1], args[1][1][1]
+        if not str(phi_x_a) == str(self._replace(phi.formula, phi.variable, a)):
+            return False
+        chi = args[1][-1][1]        
+        if self._find_term(a, chi):
+            return False
+        return str(formula) == str(chi)
 
 
     
