@@ -29,5 +29,9 @@ class AbstractDeductionSystem(ABC):
     """Base class for all the deduction systems."""
 
     @abstractmethod
-    def check(self, proof) -> bool:
-        """Get the formalism of the formula."""
+    def Proof(proof) -> bool:
+        """Build a proof according to the deduction system."""
+
+    @abstractmethod
+    def check(proof) -> bool:
+        """Check a given proof according to the deduction system rules."""
