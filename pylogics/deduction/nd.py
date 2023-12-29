@@ -30,7 +30,6 @@ from enum import Enum
 
 from pylogics.syntax.fol import Term, Variable, Constant, Function
 from pylogics.syntax.fol import Predicate, ForAll, Exists
-import copy
 
 class NaturalDeductionRule(Enum):
     """Enumeration of natural deduction rules."""
@@ -43,6 +42,10 @@ class NaturalDeductionRule(Enum):
     copy = "copy"       
     dneg_e = "dneg_e"   
     dneg_i = "dneg_i"   
+    exists_e = "exists_e"
+    exists_i = "exists_i"
+    forall_e = "forall_e"
+    forall_i = "forall_i"
     impl_e = "impl_e"   
     impl_i = "impl_i"   
     MT = "MT"
@@ -52,27 +55,37 @@ class NaturalDeductionRule(Enum):
     or_i1 = "or_i1"
     or_i2 = "or_i2"
     premise = "premise"
-    exists_e = "exists_e"
-    exists_i = "exists_i"
-    forall_e = "forall_e"
-    forall_i = "forall_i"
 
 class NaturalDeductionProof(list):
-    pass
+    def __init__(self, proof: list):
+        super().__init__()
+        while proof:
+            row, content, *proof = proof
+            if isinstance(content, Formula) or isinstance(content, Term):
+                justification, *proof = proof
+                self.append((row, content, justification))
+            elif isinstance(content, list):
+                if isinstance(content[0], Term) and isinstance(content[1], Formula):
+                    content = [content[0]] + [NaturalDeductionRule.assumption, row] + content[1:]
+                self.append((row, NaturalDeductionProof([row] + content), NaturalDeductionRule.assumption))
 
 class NaturalDeduction(AbstractDeductionSystem):
     """Natural Deduction System."""
-
 
     def __init__(self):
         self.check_justiﬁcation = {
             NaturalDeductionRule.and_e1:self._check_justiﬁcation_and_e1,
             NaturalDeductionRule.and_e2:self._check_justiﬁcation_and_e2,
             NaturalDeductionRule.and_i:self._check_justiﬁcation_and_i,
+            NaturalDeductionRule.assumption:self._check_justiﬁcation_assumption, 
             NaturalDeductionRule.bot_e:self._check_justiﬁcation_bot_e,
             NaturalDeductionRule.copy:self._check_justiﬁcation_copy,
             NaturalDeductionRule.dneg_e:self._check_justiﬁcation_dneg_e,
             NaturalDeductionRule.dneg_i:self._check_justiﬁcation_dneg_i,
+            NaturalDeductionRule.exists_e:self._check_justification_exists_e,
+            NaturalDeductionRule.exists_i:self._check_justification_exists_i,
+            NaturalDeductionRule.forall_e:self._check_justification_forall_e,
+            NaturalDeductionRule.forall_i:self._check_justification_forall_i,
             NaturalDeductionRule.impl_e:self._check_justiﬁcation_impl_e,
             NaturalDeductionRule.impl_i:self._check_justiﬁcation_impl_i,
             NaturalDeductionRule.MT:self._check_justiﬁcation_MT,
@@ -82,27 +95,14 @@ class NaturalDeduction(AbstractDeductionSystem):
             NaturalDeductionRule.or_i1:self._check_justiﬁcation_or_i1,
             NaturalDeductionRule.or_i2:self._check_justiﬁcation_or_i2,
             NaturalDeductionRule.premise:self._check_justiﬁcation_premise, 
-            NaturalDeductionRule.assumption:self._check_justiﬁcation_assumption, 
-            NaturalDeductionRule.forall_e:self._check_justification_forall_e,
-            NaturalDeductionRule.forall_i:self._check_justification_forall_i,
-            NaturalDeductionRule.exists_e:self._check_justification_exists_e,
-            NaturalDeductionRule.exists_i:self._check_justification_exists_i,
         }
 
+    
     def proof(self, proof: list):
-        proof_nf = NaturalDeductionProof()        
-        while proof:
-            row, content, *proof = proof
-            if isinstance(content, Formula) or isinstance(content, Term):
-                justification, *proof = proof
-                proof_nf.append((row, content, justification))
-            elif isinstance(content, list):
-                if isinstance(content[0], Term) and isinstance(content[1], Formula):
-                    content = [content[0]] + [NaturalDeductionRule.assumption, row] + content[1:]
-                proof_nf.append((row, self.proof([row] + content), NaturalDeductionRule.assumption))
-        return proof_nf
+        """Build a proof in the natural deduction expected format."""
+        return NaturalDeductionProof(proof)
 
-    def check(self, proof: list, sound = None) -> bool:
+    def check_proof(self, proof: NaturalDeductionProof, sound = None) -> bool:
         """Check a given proof according to natural deduction rules."""
         # raise PylogicsError(
         #     f"proof '{proof}' cannot be processed by {self.check.__name__}"  # type: ignore
@@ -121,7 +121,7 @@ class NaturalDeduction(AbstractDeductionSystem):
             elif isinstance(content, list):
                 if isinstance(content[0][1], Term) and self._find_term(content[0][1], *sound.values()):                    
                     return False # Term occurs outside its assumption
-                if self.check(content, {i:sound[i] for i in sound}) == False:
+                if self.check_proof(content, {i:sound[i] for i in sound}) == False:
                     return False
             elif isinstance(content, Term):
                 continue
@@ -263,8 +263,9 @@ class NaturalDeduction(AbstractDeductionSystem):
         x, phi = args[0].variable, args[0].formula
         a = [n for m,n in self._find_diff(phi, formula) if m == x]
         if len(a) != 1:
-            return False        
-        phi_x_a = self._replace(phi, x, a[0])
+            return False
+        a = a[0]
+        phi_x_a = self._replace(phi, x, a)
         return str(phi_x_a) == str(formula)
 
     def _check_justification_exists_i(self, formula, *args):
@@ -274,7 +275,7 @@ class NaturalDeduction(AbstractDeductionSystem):
         x, phi = formula.variable, formula.formula
         a = [n for m,n in self._find_diff(phi, args[0]) if m == x]
         if len(a) > 1:
-            return False        
+            return False
         a = a[0] if a else x
         phi_x_a = self._replace(phi, x, a)
         return str(phi_x_a) == str(args[0])
@@ -292,8 +293,14 @@ class NaturalDeduction(AbstractDeductionSystem):
             return False
         return str(formula) == str(chi)
 
-
+    @staticmethod
+    def Proof(proof: list):
+        """Build a proof according to the deduction system."""
+        nd = NaturalDeduction()
+        return nd.proof(proof)
     
-
-        
-
+    @staticmethod
+    def check(proof: NaturalDeductionProof):
+        """Check a given proof according to natural deduction rules."""
+        nd = NaturalDeduction()
+        return nd.check_proof(proof)    
