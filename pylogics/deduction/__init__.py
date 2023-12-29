@@ -1,1 +1,1 @@
-from .nd import NaturalDeduction
+from .nd import NaturalDeduction, NaturalDeductionRule, NaturalDeductionProof
