@@ -22,9 +22,14 @@
 
 """Base classes for pylogics deduction systems."""
 from abc import ABC, abstractmethod
+from typing import Container, Optional
+from pylogics.syntax.base import Logic
 
 class AbstractDeductionSystem(ABC):
     """Base class for all the deduction systems."""
+
+    ALLOWED_LOGICS: Optional[Container[Logic]] = None
+    FORBIDDEN_LOGICS: Optional[Container[Logic]] = None
 
     @abstractmethod
     def Proof(proof) -> bool:
