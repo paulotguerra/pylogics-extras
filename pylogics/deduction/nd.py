@@ -72,31 +72,32 @@ class NaturalDeductionProof(list):
 class NaturalDeduction(AbstractDeductionSystem):
     """Natural Deduction System."""
 
+    rule = NaturalDeductionRule
+
     def __init__(self):
         self.check_justiﬁcation = {
-            NaturalDeductionRule.and_e1:self._check_justiﬁcation_and_e1,
-            NaturalDeductionRule.and_e2:self._check_justiﬁcation_and_e2,
-            NaturalDeductionRule.and_i:self._check_justiﬁcation_and_i,
-            NaturalDeductionRule.assumption:self._check_justiﬁcation_assumption, 
-            NaturalDeductionRule.bot_e:self._check_justiﬁcation_bot_e,
-            NaturalDeductionRule.copy:self._check_justiﬁcation_copy,
-            NaturalDeductionRule.dneg_e:self._check_justiﬁcation_dneg_e,
-            NaturalDeductionRule.dneg_i:self._check_justiﬁcation_dneg_i,
-            NaturalDeductionRule.exists_e:self._check_justification_exists_e,
-            NaturalDeductionRule.exists_i:self._check_justification_exists_i,
-            NaturalDeductionRule.forall_e:self._check_justification_forall_e,
-            NaturalDeductionRule.forall_i:self._check_justification_forall_i,
-            NaturalDeductionRule.impl_e:self._check_justiﬁcation_impl_e,
-            NaturalDeductionRule.impl_i:self._check_justiﬁcation_impl_i,
-            NaturalDeductionRule.MT:self._check_justiﬁcation_MT,
-            NaturalDeductionRule.neg_e:self._check_justiﬁcation_neg_e,
-            NaturalDeductionRule.neg_i:self._check_justiﬁcation_neg_i,
-            NaturalDeductionRule.or_e:self._check_justiﬁcation_or_e,
-            NaturalDeductionRule.or_i1:self._check_justiﬁcation_or_i1,
-            NaturalDeductionRule.or_i2:self._check_justiﬁcation_or_i2,
-            NaturalDeductionRule.premise:self._check_justiﬁcation_premise, 
+            self.rule.and_e1:self._check_justiﬁcation_and_e1,
+            self.rule.and_e2:self._check_justiﬁcation_and_e2,
+            self.rule.and_i:self._check_justiﬁcation_and_i,
+            self.rule.assumption:self._check_justiﬁcation_assumption, 
+            self.rule.bot_e:self._check_justiﬁcation_bot_e,
+            self.rule.copy:self._check_justiﬁcation_copy,
+            self.rule.dneg_e:self._check_justiﬁcation_dneg_e,
+            self.rule.dneg_i:self._check_justiﬁcation_dneg_i,
+            self.rule.exists_e:self._check_justification_exists_e,
+            self.rule.exists_i:self._check_justification_exists_i,
+            self.rule.forall_e:self._check_justification_forall_e,
+            self.rule.forall_i:self._check_justification_forall_i,
+            self.rule.impl_e:self._check_justiﬁcation_impl_e,
+            self.rule.impl_i:self._check_justiﬁcation_impl_i,
+            self.rule.MT:self._check_justiﬁcation_MT,
+            self.rule.neg_e:self._check_justiﬁcation_neg_e,
+            self.rule.neg_i:self._check_justiﬁcation_neg_i,
+            self.rule.or_e:self._check_justiﬁcation_or_e,
+            self.rule.or_i1:self._check_justiﬁcation_or_i1,
+            self.rule.or_i2:self._check_justiﬁcation_or_i2,
+            self.rule.premise:self._check_justiﬁcation_premise, 
         }
-
     
     def proof(self, proof: list):
         """Build a proof in the natural deduction expected format."""
