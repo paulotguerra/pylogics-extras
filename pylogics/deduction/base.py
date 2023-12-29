@@ -21,9 +21,7 @@
 #
 
 """Base classes for pylogics deduction systems."""
-import re
 from abc import ABC, abstractmethod
-from enum import Enum
 
 class AbstractDeductionSystem(ABC):
     """Base class for all the deduction systems."""
